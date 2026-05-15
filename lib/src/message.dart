@@ -1145,6 +1145,22 @@ class OffsetHeader {
     required this.rawStart,
     required this.rawEnd,
   });
+
+  /// Map-style accessor used by the IMAP fetch path, which treats
+  /// header records as `Map<String, dynamic>` for forward compatibility.
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'name':
+        return name;
+      case 'value':
+        return value;
+      case 'rawStart':
+        return rawStart;
+      case 'rawEnd':
+        return rawEnd;
+    }
+    return null;
+  }
 }
 
 int _findEol(Uint8List buf, int start, int end) {
@@ -1394,6 +1410,52 @@ class MimeTreeNode {
     required this.bodyLines,
     this.parts,
   });
+
+  /// Map-style accessor used by the IMAP fetch path, which treats
+  /// mime tree nodes as `Map<String, dynamic>` for forward compatibility.
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'start':
+        return start;
+      case 'end':
+        return end;
+      case 'headerStart':
+        return headerStart;
+      case 'headerEnd':
+        return headerEnd;
+      case 'bodyStart':
+        return bodyStart;
+      case 'bodyEnd':
+        return bodyEnd;
+      case 'parts':
+        return parts;
+      case 'headers':
+        return headers;
+      case 'contentType':
+        return contentType;
+      case 'contentTypeParams':
+        return contentTypeParams;
+      case 'contentTransferEncoding':
+        return contentTransferEncoding;
+      case 'contentDisposition':
+        return contentDisposition;
+      case 'contentDispositionParams':
+        return contentDispositionParams;
+      case 'contentId':
+        return contentId;
+      case 'contentDescription':
+        return contentDescription;
+      case 'contentLanguage':
+        return contentLanguage;
+      case 'contentLocation':
+        return contentLocation;
+      case 'contentMd5':
+        return contentMd5;
+      case 'bodyLines':
+        return bodyLines;
+    }
+    return null;
+  }
 }
 
 MimeTreeNode parseMessageTree(dynamic inputBuf) {

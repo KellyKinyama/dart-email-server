@@ -43,6 +43,17 @@ sealed class ImapToken {
 
   dynamic get value;
   String get type;
+
+  /// Backward-compat map-style access used by some helpers
+  /// (e.g. parseSearchCriteria).
+  ///
+  /// `tok['value']` and `tok['type']` mirror the equivalent property; any
+  /// other key returns `null`.
+  dynamic operator [](Object? key) {
+    if (key == 'value') return value;
+    if (key == 'type') return type;
+    return null;
+  }
 }
 
 class AtomToken extends ImapToken {
