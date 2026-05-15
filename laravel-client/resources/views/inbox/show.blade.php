@@ -1,23 +1,44 @@
-<x-layout :title="$message['subject'] ?: '(no subject)'">
-  <p><a href="{{ route('inbox.index', ['folder' => $folder]) }}">&larr; back to {{ $folder }}</a></p>
+<x-layout :title="$message['subject'] ?: '(no subject)'" activeNav="inbox" :activeFolder="$folder">
+  @php
+    $palette = ['#1a73e8','#34a853','#fbbc04','#ea4335','#a142f4','#16a2d7','#ff6d00','#0b8043'];
+    $hash = 0;
+    foreach (str_split((string) ($message['from'] ?? '?')) as $ch) { $hash = ($hash * 31 + ord($ch)) & 0xffffffff; }
+    $color = $palette[$hash % count($palette)];
+    $initial = strtoupper(substr((string) ($message['fromName'] ?: $message['from'] ?: '?'), 0, 1));
+  @endphp
 
-  <h2 style="margin-bottom:4px">{{ $message['subject'] ?: '(no subject)' }}</h2>
-  <p class="small">
-    From: {{ $message['fromName'] ?: $message['from'] }} &lt;{{ $message['from'] }}&gt; &middot;
-    To: {{ implode(', ', $message['to']) }} &middot;
-    {{ $message['date'] }}
-  </p>
+  <div class="toolbar">
+    <a href="{{ route('inbox.index', ['folder' => $folder]) }}" class="icon-btn" title="Back to {{ $folder }}">←</a>
+    <h1>{{ $message['subject'] ?: '(no subject)' }}</h1>
+    <span class="right">{{ number_format($message['size']) }} B</span>
+  </div>
 
-  @if ($message['html'])
-    <iframe srcdoc="{{ e($message['html']) }}" style="width:100%;min-height:400px;border:1px solid #8884;border-radius:6px;background:white"></iframe>
-  @elseif ($message['text'])
-    <pre>{{ $message['text'] }}</pre>
-  @else
-    <p class="small">(empty body)</p>
-  @endif
+  <div class="msg-card">
+    <div class="msg-meta">
+      <span class="avatar lg" style="background:{{ $color }}">{{ $initial }}</span>
+      <div>
+        <div class="who">
+          <span class="name">{{ $message['fromName'] ?: $message['from'] }}</span>
+          <span class="addr">&lt;{{ $message['from'] }}&gt;</span>
+          <span class="when">{{ $message['date'] }}</span>
+        </div>
+        <div class="row2">to {{ implode(', ', $message['to'] ?: [config('dart_email.imap.username')]) }}</div>
+      </div>
+    </div>
 
-  <details style="margin-top:24px">
-    <summary class="small">Raw headers ({{ number_format($message['size']) }} B)</summary>
-    <pre>{{ $message['headers'] }}</pre>
-  </details>
+    <div class="msg-body">
+      @if (! empty($message['html']))
+        <iframe sandbox srcdoc="{{ $message['html'] }}"></iframe>
+      @elseif (! empty($message['text']))
+        <pre>{{ $message['text'] }}</pre>
+      @else
+        <p style="color: var(--text-2);">(empty body)</p>
+      @endif
+    </div>
+
+    <details class="headers">
+      <summary>Show original headers</summary>
+      <pre>{{ $message['headers'] }}</pre>
+    </details>
+  </div>
 </x-layout>

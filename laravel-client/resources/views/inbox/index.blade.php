@@ -1,34 +1,55 @@
-<x-layout title="Inbox">
+<x-layout title="{{ $folder }}" activeNav="inbox" :activeFolder="$folder">
+  <div class="toolbar">
+    <h1>{{ $folder }}</h1>
+    <span class="right">{{ count($messages) }} {{ \Illuminate\Support\Str::plural('message', count($messages)) }}</span>
+  </div>
+
   @if ($error)
     <div class="err">IMAP error: {{ $error }}</div>
   @endif
 
-  <p class="small">
-    Folder:
-    <select onchange="window.location='{{ route('inbox.index') }}?folder=' + encodeURIComponent(this.value)">
-      @foreach ($folders as $name => $path)
-        <option value="{{ $name }}" @selected($name === $folder)>{{ $name }}</option>
-      @endforeach
-      @if (! count($folders))
-        <option>{{ $folder }}</option>
-      @endif
-    </select>
-    &middot; {{ count($messages) }} message(s)
-  </p>
+  @php
+    $palette = ['#1a73e8','#34a853','#fbbc04','#ea4335','#a142f4','#16a2d7','#ff6d00','#0b8043'];
+    $colorFor = function (?string $email) use ($palette) {
+      if (! $email) return $palette[0];
+      $hash = 0;
+      foreach (str_split($email) as $ch) { $hash = ($hash * 31 + ord($ch)) & 0xffffffff; }
+      return $palette[$hash % count($palette)];
+    };
+    $initialOf = function (?string $name, ?string $email) {
+      $base = trim((string) $name) !== '' ? $name : (string) $email;
+      return strtoupper(substr($base, 0, 1) ?: '?');
+    };
+  @endphp
 
-  <table>
-    <thead><tr><th>From</th><th>Subject</th><th>Date</th><th>Size</th></tr></thead>
-    <tbody>
-      @forelse ($messages as $m)
-        <tr onclick="window.location='{{ route('inbox.show', [$folder, $m['uid']]) }}'" style="cursor:pointer">
-          <td>{{ $m['fromName'] ?: $m['from'] }}<br><span class="small">{{ $m['from'] }}</span></td>
-          <td>{!! $m['seen'] ? '' : '<strong>' !!}{{ $m['subject'] ?: '(no subject)' }}{!! $m['seen'] ? '' : '</strong>' !!}</td>
-          <td class="small">{{ $m['date'] }}</td>
-          <td class="small">{{ number_format($m['size']) }} B</td>
-        </tr>
-      @empty
-        <tr><td colspan="4" style="text-align:center" class="small">No messages.</td></tr>
-      @endforelse
-    </tbody>
-  </table>
+  <ul class="mlist">
+    @forelse ($messages as $m)
+      @php
+        $url = route('inbox.show', ['folder' => $folder, 'uid' => $m['uid']]);
+        $who = $m['fromName'] ?: $m['from'] ?: '(unknown)';
+      @endphp
+      <li class="{{ $m['seen'] ? 'read' : '' }}" onclick="window.location='{{ $url }}'">
+        <div class="from" style="display:flex;align-items:center;gap:10px;">
+          <span class="avatar" style="width:28px;height:28px;font-size:12px;background:{{ $colorFor($m['from']) }}">
+            {{ $initialOf($m['fromName'], $m['from']) }}
+          </span>
+          <span style="overflow:hidden;text-overflow:ellipsis;">{{ $who }}</span>
+        </div>
+        <div class="subj">{{ $m['subject'] ?: '(no subject)' }}</div>
+        <div class="date">{{ $m['date'] }}</div>
+      </li>
+    @empty
+      <li class="empty" style="cursor:default;display:block;border:0;height:auto;">
+        <div class="big">📭</div>
+        <div>Nothing in <strong>{{ $folder }}</strong>.</div>
+        <div style="margin-top:6px;font-size:12px;">
+          @if (strcasecmp($folder, 'INBOX') === 0)
+            New mail will appear here as it arrives.
+          @else
+            Move or copy messages here from another folder.
+          @endif
+        </div>
+      </li>
+    @endforelse
+  </ul>
 </x-layout>

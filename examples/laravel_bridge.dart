@@ -49,12 +49,14 @@ class StoredMessage {
   int get size => raw.length;
 }
 
-/// In-memory mailbox keyed by username. Holds messages and assigns UIDs.
+/// In-memory mailbox keyed by folder name. Holds messages and assigns UIDs.
 class Mailbox {
-  Mailbox()
+  Mailbox({required this.name, this.specialUse})
     : uidValidity = DateTime.now().millisecondsSinceEpoch ~/ 1000,
       _nextUid = 1;
 
+  final String name;
+  final String? specialUse; // e.g. '\\Sent', '\\Drafts', '\\Trash', '\\Junk'
   final List<StoredMessage> messages = <StoredMessage>[];
   final int uidValidity;
   int _nextUid;
@@ -77,12 +79,42 @@ class Mailbox {
   void purgeDeleted() => messages.removeWhere((m) => m.deleted);
 }
 
-/// Immutable demo store keyed by user.
-class MailboxStore {
-  final Map<String, Mailbox> _byUser = <String, Mailbox>{};
+/// Per-user account containing a fixed set of standard folders.
+class Account {
+  Account() {
+    for (final spec in _defaultFolders) {
+      _folders[spec.name.toLowerCase()] = Mailbox(
+        name: spec.name,
+        specialUse: spec.specialUse,
+      );
+    }
+  }
 
-  Mailbox forUser(String user) =>
-      _byUser.putIfAbsent(user.toLowerCase(), () => Mailbox());
+  static const List<({String name, String? specialUse})> _defaultFolders = [
+    (name: 'INBOX', specialUse: null),
+    (name: 'Sent', specialUse: '\\Sent'),
+    (name: 'Drafts', specialUse: '\\Drafts'),
+    (name: 'Trash', specialUse: '\\Trash'),
+    (name: 'Junk', specialUse: '\\Junk'),
+  ];
+
+  final Map<String, Mailbox> _folders = <String, Mailbox>{};
+
+  Iterable<Mailbox> get folders => _folders.values;
+
+  /// Folder lookup is case-insensitive; IMAP `INBOX` is canonically uppercase.
+  Mailbox? folder(String name) => _folders[name.toLowerCase()];
+
+  /// Convenience for the inbound delivery path.
+  Mailbox get inbox => _folders['inbox']!;
+}
+
+/// Demo store keyed by user.
+class MailboxStore {
+  final Map<String, Account> _byUser = <String, Account>{};
+
+  Account forUser(String user) =>
+      _byUser.putIfAbsent(user.toLowerCase(), () => Account());
 }
 
 // Note: FolderInfo, OpenFolderResult, StatusResult, ResolveQuery, MessageRef,
@@ -200,7 +232,7 @@ class LaravelBridge {
 
   void _onSmtpSession(dynamic sess, SmtpFacadeState st) {
     sess.on('mail', (MailObject mail) {
-      _ingest(mail);
+      _ingest(mail, st);
       // Accept first, push the webhook asynchronously. Otherwise we
       // deadlock when Laravel's single-worker `php artisan serve` is
       // the SMTP client AND the webhook target — the worker is blocked
@@ -211,17 +243,24 @@ class LaravelBridge {
   }
 
   void _onMailboxSession(MailboxFacade mb) {
-    final box = store.forUser(mb.username ?? _user);
+    final account = store.forUser(mb.username ?? _user);
     if (mb.protocol == 'imap') {
-      ImapHandler(mb, box).bind();
+      ImapHandler(mb, account).bind();
     } else if (mb.protocol == 'pop3') {
-      Pop3Handler(mb, box).bind();
+      Pop3Handler(mb, account.inbox).bind();
     }
   }
 
-  void _ingest(MailObject mail) {
+  void _ingest(MailObject mail, SmtpFacadeState st) {
+    final raw = Uint8List.fromList(mail.raw);
     for (final rcpt in mail.to) {
-      store.forUser(rcpt).add(Uint8List.fromList(mail.raw));
+      store.forUser(rcpt).inbox.add(raw);
+    }
+    // Mail submitted by an authenticated user (port 2587) is also
+    // mirrored into the sender's "Sent" folder, like every real MUA does.
+    if (st.isSubmission && st.username != null) {
+      final sent = store.forUser(st.username!).folder('Sent');
+      sent?.add(raw);
     }
   }
 
@@ -253,17 +292,22 @@ class LaravelBridge {
 // ---------------------------------------------------------------------------
 
 class ImapHandler {
-  ImapHandler(this.mb, this.box);
+  ImapHandler(this.mb, this.account);
 
   final MailboxFacade mb;
-  final Mailbox box;
+  final Account account;
 
   void bind() {
     mb.onFolders((respond) {
-      respond.ok(const [FolderInfo(name: 'INBOX')]);
+      respond.ok([
+        for (final f in account.folders)
+          FolderInfo(name: f.name, specialUse: f.specialUse),
+      ]);
     });
 
     mb.onOpenFolder((name, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.error('Folder not found: $name');
       final live = box.live();
       respond.ok(
         OpenFolderResult(
@@ -275,6 +319,8 @@ class ImapHandler {
     });
 
     mb.onStatus((name, items, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.error('Folder not found: $name');
       final live = box.live();
       final unseen = live.where((m) => !m.flags.contains('\\Seen')).length;
       respond.ok(
@@ -288,6 +334,8 @@ class ImapHandler {
     });
 
     mb.onResolveMessages((name, query, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.ok(const <MessageRef>[]);
       final live = box.live();
       final out = <MessageRef>[];
       for (var i = 0; i < live.length; i++) {
@@ -299,6 +347,8 @@ class ImapHandler {
     });
 
     mb.onMessageMeta((name, uids, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.ok(const <MessageMeta>[]);
       final live = box.live();
       final byUid = <int, StoredMessage>{for (var m in live) m.uid: m};
       final indexByUid = <int, int>{
@@ -322,7 +372,8 @@ class ImapHandler {
     });
 
     mb.onImapMessageBody((name, uid, body) {
-      final m = _findLive(uid);
+      final box = account.folder(name);
+      final m = box == null ? null : _findLive(box, uid);
       if (m == null) {
         body.error('No such message');
       } else {
@@ -331,6 +382,8 @@ class ImapHandler {
     });
 
     mb.onSetFlags((name, req, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.ok();
       final byUid = <int, StoredMessage>{for (var m in box.messages) m.uid: m};
       for (final u in req.uids) {
         final m = byUid[u];
@@ -352,24 +405,84 @@ class ImapHandler {
     });
 
     mb.onExpunge((name, opts, respond) {
-      box.purgeDeleted();
+      account.folder(name)?.purgeDeleted();
       respond.ok();
     });
 
     // Minimal SEARCH support: ignore the criteria tree and return every
-    // live message. Good enough for `SEARCH ALL` / `UID SEARCH ALL`,
-    // which is what most clients (including webklex/php-imap) issue
-    // before fetching a folder listing.
+    // live message in the selected folder. Good enough for `SEARCH ALL`
+    // / `UID SEARCH ALL`, which is what most clients (including
+    // webklex/php-imap) issue before fetching a folder listing.
     mb.onSearch((name, criteria, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.ok(const <MessageRef>[]);
       final live = box.live();
       respond.ok([
         for (var i = 0; i < live.length; i++)
           MessageRef(seq: i + 1, uid: live[i].uid),
       ]);
     });
+
+    // APPEND — store a new message into [folder]. Used by clients that
+    // upload sent mail into "Sent", save drafts into "Drafts", etc.
+    mb.onAppend((name, raw, options, respond) {
+      final box = account.folder(name);
+      if (box == null) return respond.error('Folder not found: $name');
+      final assignedUid = box.uidNext;
+      box.add(raw);
+      // Apply any flags the client requested at APPEND time.
+      if (options.flags.isNotEmpty) {
+        final m = box.messages.last;
+        m.flags.addAll(options.flags);
+      }
+      respond.ok(AppendResult(uid: assignedUid, uidValidity: box.uidValidity));
+    });
+
+    // COPY — duplicate the selected messages into [destination].
+    mb.onCopyMessages((src, uids, destination, respond) {
+      final from = account.folder(src);
+      final to = account.folder(destination);
+      if (from == null || to == null) {
+        return respond.error('Folder not found');
+      }
+      final byUid = <int, StoredMessage>{for (var m in from.messages) m.uid: m};
+      final mapping = <CopyMapping>[];
+      for (final u in uids) {
+        final m = byUid[u];
+        if (m == null) continue;
+        final newUid = to.uidNext;
+        to.add(Uint8List.fromList(m.raw));
+        if (m.flags.isNotEmpty) to.messages.last.flags.addAll(m.flags);
+        mapping.add(CopyMapping(srcUid: u, dstUid: newUid));
+      }
+      respond.ok(CopyResult(dstUidValidity: to.uidValidity, mapping: mapping));
+    });
+
+    // MOVE — copy + delete from source. The IMAP layer emits the EXPUNGE
+    // responses for the source UIDs based on the resolveMessages output.
+    mb.onMoveMessages((src, uids, destination, respond) {
+      final from = account.folder(src);
+      final to = account.folder(destination);
+      if (from == null || to == null) {
+        return respond.error('Folder not found');
+      }
+      final byUid = <int, StoredMessage>{for (var m in from.messages) m.uid: m};
+      final mapping = <CopyMapping>[];
+      for (final u in uids) {
+        final m = byUid[u];
+        if (m == null) continue;
+        final newUid = to.uidNext;
+        to.add(Uint8List.fromList(m.raw));
+        if (m.flags.isNotEmpty) to.messages.last.flags.addAll(m.flags);
+        mapping.add(CopyMapping(srcUid: u, dstUid: newUid));
+      }
+      // Drop moved messages from the source.
+      from.messages.removeWhere((m) => uids.contains(m.uid));
+      respond.ok(CopyResult(dstUidValidity: to.uidValidity, mapping: mapping));
+    });
   }
 
-  StoredMessage? _findLive(int uid) {
+  StoredMessage? _findLive(Mailbox box, int uid) {
     for (final m in box.live()) {
       if (m.uid == uid) return m;
     }

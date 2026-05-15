@@ -249,6 +249,55 @@ class ExpungeOptions {
 }
 
 // ===========================================================================
+// APPEND / COPY / MOVE
+// ===========================================================================
+
+/// Optional `APPEND` flags + internal date.
+class AppendOptions {
+  AppendOptions._(this.flags, this.internalDate);
+
+  factory AppendOptions.fromMap(Map<String, dynamic> raw) {
+    final flags = (raw['flags'] as List?)?.cast<String>() ?? const <String>[];
+    final id = raw['internalDate'];
+    return AppendOptions._(flags, id is DateTime ? id : null);
+  }
+
+  final List<String> flags;
+  final DateTime? internalDate;
+}
+
+/// Result returned to the IMAP layer for a successful `APPEND`.
+class AppendResult {
+  const AppendResult({required this.uid, required this.uidValidity});
+  final int uid;
+  final int uidValidity;
+
+  Map<String, dynamic> toMap() => {'uid': uid, 'uidValidity': uidValidity};
+}
+
+/// One source→destination UID pair for `COPY`/`MOVE` reporting.
+class CopyMapping {
+  const CopyMapping({required this.srcUid, required this.dstUid});
+  final int srcUid;
+  final int dstUid;
+
+  Map<String, dynamic> toMap() => {'srcUid': srcUid, 'dstUid': dstUid};
+}
+
+/// Result returned to the IMAP layer for a successful `COPY` or `MOVE`.
+/// Drives the `COPYUID` response code.
+class CopyResult {
+  const CopyResult({required this.dstUidValidity, required this.mapping});
+  final int dstUidValidity;
+  final List<CopyMapping> mapping;
+
+  Map<String, dynamic> toMap() => {
+    'dstUidValidity': dstUidValidity,
+    'mapping': [for (final m in mapping) m.toMap()],
+  };
+}
+
+// ===========================================================================
 // Generic responder helpers
 // ===========================================================================
 
@@ -456,6 +505,83 @@ extension TypedMailboxFacade on MailboxFacade {
           cb,
           (list) => _listToMap<MessageRef>(list, (m) => m.toMap()),
         ),
+      );
+    });
+  }
+
+  /// IMAP `APPEND` — store a new RFC-5322 message into [folder]. The
+  /// handler must respond with the assigned UID and the folder's
+  /// uidvalidity so the IMAP layer can emit a `APPENDUID` response code.
+  void onAppend(
+    void Function(
+      String folder,
+      Uint8List raw,
+      AppendOptions options,
+      ValueResponder<AppendResult> respond,
+    )
+    h,
+  ) {
+    on('append', (
+      String folder,
+      Uint8List raw,
+      Map<String, dynamic> options,
+      Function cb,
+    ) {
+      h(
+        folder,
+        raw,
+        AppendOptions.fromMap(options),
+        ValueResponder<AppendResult>(cb, (r) => r.toMap()),
+      );
+    });
+  }
+
+  /// IMAP `COPY` / `UID COPY` — copy messages from the currently selected
+  /// folder to [destination]. Respond with the destination uidvalidity
+  /// and the source→destination UID mapping.
+  void onCopyMessages(
+    void Function(
+      String sourceFolder,
+      List<int> uids,
+      String destination,
+      ValueResponder<CopyResult> respond,
+    )
+    h,
+  ) {
+    on('copyMessages', (
+      String src,
+      List<dynamic> uids,
+      String dst,
+      Function cb,
+    ) {
+      h(
+        src,
+        uids.whereType<int>().toList(growable: false),
+        dst,
+        ValueResponder<CopyResult>(cb, (r) => r.toMap()),
+      );
+    });
+  }
+
+  /// IMAP `MOVE` / `UID MOVE` — atomically copy + delete. Respond with
+  /// the destination uidvalidity and the source→destination UID mapping;
+  /// the IMAP layer emits the matching `EXPUNGE` responses for the
+  /// source UIDs automatically.
+  void onMoveMessages(
+    void Function(
+      String sourceFolder,
+      List<int> uids,
+      String destination,
+      ValueResponder<CopyResult> respond,
+    )
+    h,
+  ) {
+    on('move', (String src, List<dynamic> uids, String dst, Function cb) {
+      h(
+        src,
+        uids.whereType<int>().toList(growable: false),
+        dst,
+        ValueResponder<CopyResult>(cb, (r) => r.toMap()),
       );
     });
   }

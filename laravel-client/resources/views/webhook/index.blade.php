@@ -1,21 +1,31 @@
-<x-layout title="Webhook log">
-  <p class="small">Mail pushed by dart_email_server to <code>POST /api/incoming-mail</code>.</p>
-  <table>
-    <thead><tr><th>Received</th><th>From</th><th>To</th><th>Subject</th><th>SPF</th><th>DKIM</th><th>DMARC</th><th>rDNS</th></tr></thead>
-    <tbody>
+<x-layout title="Webhook log" activeNav="webhook">
+  <div class="toolbar">
+    <h1>Webhook log</h1>
+    <span class="right">{{ count($messages) }} {{ \Illuminate\Support\Str::plural('event', count($messages)) }}</span>
+  </div>
+
+  <p style="padding: 0 24px; color: var(--text-2); font-size: 12px; margin: 12px 0 0;">
+    Mail pushed by <code>dart_email_server</code> to <code>POST /api/incoming-mail</code>.
+  </p>
+
+  <ul class="mlist" style="margin-top: 12px;">
     @forelse ($messages as $m)
-      <tr onclick="window.location='{{ route('webhook.show', $m) }}'" style="cursor:pointer">
-        <td class="small">{{ optional($m->received_at)->format('Y-m-d H:i') }}</td>
-        <td>{{ $m->envelope_from }}</td>
-        <td class="small">{{ implode(', ', $m->envelope_to ?? []) }}</td>
-        <td>{{ $m->subject ?: '(no subject)' }}</td>
-        @foreach (['spf','dkim','dmarc','rdns'] as $k)
-          <td><span class="badge {{ $m->{$k} ?: 'none' }}">{{ $m->{$k} ?: '—' }}</span></td>
-        @endforeach
-      </tr>
+      <li onclick="window.location='{{ route('webhook.show', $m) }}'">
+        <div class="from">{{ $m->envelope_from ?: '(unknown)' }}</div>
+        <div class="subj">
+          {{ $m->subject ?: '(no subject)' }}
+          <span class="snippet">to {{ implode(', ', $m->envelope_to ?? []) }}</span>
+        </div>
+        <div class="date">{{ optional($m->received_at)->format('M j, H:i') }}</div>
+      </li>
     @empty
-      <tr><td colspan="8" style="text-align:center" class="small">Nothing received yet.</td></tr>
+      <li class="empty" style="cursor:default;display:block;border:0;height:auto;">
+        <div class="big">🔔</div>
+        <div>No webhook events yet.</div>
+        <div style="margin-top:6px;font-size:12px;">
+          Send mail to the dart_email_server SMTP listener and it will appear here.
+        </div>
+      </li>
     @endforelse
-    </tbody>
-  </table>
+  </ul>
 </x-layout>
