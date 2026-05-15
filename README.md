@@ -205,6 +205,10 @@ ecosystem with links into this codebase:
 
 Start at [docs/README.md](docs/README.md).
 
+For an implementation-focused tour — *how this codebase implements*
+each protocol, file by file and class by class — see
+[**docs/nuts-and-bolts/**](docs/nuts-and-bolts/README.md).
+
 ---
 
 ## Public API at a glance

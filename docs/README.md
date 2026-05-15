@@ -42,6 +42,10 @@ The repository implements all three legs of the mail triangle in pure Dart:
 
 Runnable demos live in [examples/README.md](../examples/README.md).
 
+For a code-level walkthrough of *how this codebase implements* the
+protocols above — file by file, class by class — see the companion
+[**Nuts and Bolts**](nuts-and-bolts/README.md) tour.
+
 ## Conventions used in these docs
 
 * `>` lines are sent **by the client** to the server.
