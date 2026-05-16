@@ -95,12 +95,7 @@ class ImapMailboxService
 
         $msg->setFlag(['Seen']);
 
-        $addrList = function ($attr): array {
-            if (! $attr) return [];
-            $items = method_exists($attr, 'get') ? ($attr->get() ?? []) : (array) $attr;
-            if (! is_array($items)) { $items = iterator_to_array($items); }
-            return array_values(array_map(fn ($a) => $a->mail, $items));
-        };
+        $addrList = fn ($attr): array => self::normalizeAddressList($attr);
 
         $atts = [];
         foreach ($msg->getAttachments() as $i => $att) {
@@ -151,5 +146,45 @@ class ImapMailboxService
             'mime'    => $att->getMimeType() ?: 'application/octet-stream',
             'content' => $att->getContent(),
         ];
+    }
+
+    /**
+     * Normalize whatever webklex/php-imap returns from getTo()/getCc()/etc.
+     * into a flat list of email-address strings.
+     *
+     * Possible shapes:
+     *  - null
+     *  - a single \Webklex\PHPIMAP\Address (when only one recipient)
+     *  - a Webklex Attribute whose ->get() returns an array/Collection
+     *  - a plain array or Traversable of Address objects
+     *
+     * @return array<int, string>
+     */
+    public static function normalizeAddressList(mixed $attr): array
+    {
+        if (! $attr) {
+            return [];
+        }
+        if ($attr instanceof \Webklex\PHPIMAP\Address) {
+            $items = [$attr];
+        } elseif (is_object($attr) && method_exists($attr, 'get')) {
+            $items = $attr->get() ?? [];
+        } else {
+            $items = $attr;
+        }
+        if ($items instanceof \Webklex\PHPIMAP\Address) {
+            $items = [$items];
+        }
+        if (is_array($items)) {
+            // ok
+        } elseif ($items instanceof \Traversable) {
+            $items = iterator_to_array($items);
+        } else {
+            $items = (array) $items;
+        }
+        return array_values(array_filter(array_map(
+            fn ($a) => is_object($a) && isset($a->mail) && $a->mail !== '' ? $a->mail : null,
+            $items
+        )));
     }
 }
