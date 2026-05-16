@@ -16,8 +16,8 @@
     <input wire:model="fromName" placeholder="Optional display name">
     @error('fromName') <div class="err">{{ $message }}</div> @enderror
 
-    <label>To <span class="hint">(comma-separated)</span></label>
-    <input wire:model="to" required placeholder="someone@example.com">
+    <label>To <span class="hint">(comma-separated; use <code>group:slug</code> or a group's email to expand a list)</span></label>
+    <input wire:model="to" required placeholder="someone@example.com, group:sales-team">
     @error('to') <div class="err">{{ $message }}</div> @enderror
 
     <div class="addr-toggles" style="display:flex;gap:12px;margin:-8px 0 4px;">

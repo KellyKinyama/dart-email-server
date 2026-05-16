@@ -54,17 +54,56 @@ class Form extends Component
     public function toggleCc(): void  { $this->showCc  = ! $this->showCc;  }
     public function toggleBcc(): void { $this->showBcc = ! $this->showBcc; }
 
+    /**
+     * Expand recipient tokens into bare email addresses.
+     *
+     * Each comma/semicolon-separated entry is treated as one of:
+     *   - a literal email address (passed through)
+     *   - a group reference of the form `group:slug`
+     *   - the alias email of a Group (e.g. `sales@dartmail.local`)
+     *
+     * Group entries are replaced with the email of every linked user.
+     * Empty members and duplicates are dropped while preserving order.
+     *
+     * @return list<string>
+     */
+    public static function expandRecipients(?string $raw): array
+    {
+        if (! $raw) { return []; }
+
+        $tokens = array_values(array_filter(array_map('trim',
+            preg_split('/[,;]+/', $raw) ?: []
+        )));
+
+        $out = [];
+        foreach ($tokens as $tok) {
+            $emails = [$tok];
+            if (str_starts_with(strtolower($tok), 'group:')) {
+                $slug   = substr($tok, 6);
+                $group  = \App\Models\Group::firstWhere('slug', $slug);
+                $emails = $group ? $group->memberEmails() : [];
+            } else {
+                $group = \App\Models\Group::firstWhere('email', $tok);
+                if ($group) {
+                    $emails = $group->memberEmails();
+                }
+            }
+            foreach ($emails as $e) {
+                if ($e !== '' && ! in_array($e, $out, true)) {
+                    $out[] = $e;
+                }
+            }
+        }
+        return $out;
+    }
+
     public function send(): void
     {
         $this->validate();
 
-        $split = fn (?string $s) => $s
-            ? array_values(array_filter(array_map('trim', preg_split('/[,;]+/', $s))))
-            : [];
-
-        $to  = $split($this->to);
-        $cc  = $split($this->cc);
-        $bcc = $split($this->bcc);
+        $to  = self::expandRecipients($this->to);
+        $cc  = self::expandRecipients($this->cc);
+        $bcc = self::expandRecipients($this->bcc);
 
         $message = OutboundMessage::create([
             'subject'       => $this->subject,

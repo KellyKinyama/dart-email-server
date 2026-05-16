@@ -473,7 +473,12 @@
       @if (auth()->user()?->hasRole('admin'))
         <li>
           <a href="{{ route('admin.users') }}" class="{{ $activeNav === 'admin' ? 'active' : '' }}">
-            <span class="glyph">🛡️</span><span>Admin</span>
+            <span class="glyph">🛡️</span><span>Admin · Users</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ route('admin.groups') }}" class="{{ $activeNav === 'admin-groups' ? 'active' : '' }}">
+            <span class="glyph">👥</span><span>Admin · Groups</span>
           </a>
         </li>
       @endif
