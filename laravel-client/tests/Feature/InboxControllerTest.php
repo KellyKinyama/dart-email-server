@@ -2,12 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Services\ImapMailboxService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
 
 class InboxControllerTest extends TestCase
 {
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create());
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();

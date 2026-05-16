@@ -25,6 +25,7 @@ class ComposeControllerTest extends TestCase
         Mail::fake();
         Storage::fake('public');
         Storage::fake('local');
+        $this->actingAs(\App\Models\User::factory()->create());
     }
 
     public function test_get_compose_shows_form(): void

@@ -423,9 +423,15 @@
       SMTP {{ config('dart_email.smtp.host') }}:{{ config('dart_email.smtp.port') }}
       &middot; IMAP {{ config('dart_email.imap.host') }}:{{ config('dart_email.imap.port') }}
     </div>
-    <div class="avatar" title="{{ config('dart_email.imap.username') }}">
-      {{ strtoupper(substr(config('dart_email.imap.username'), 0, 1)) }}
+    <div class="avatar" title="{{ auth()->user()?->email ?: config('dart_email.imap.username') }}">
+      {{ strtoupper(substr(auth()->user()?->name ?: auth()->user()?->email ?: config('dart_email.imap.username'), 0, 1)) }}
     </div>
+    @auth
+      <form method="post" action="{{ url('/logout') }}" style="margin:0;">
+        @csrf
+        <button type="submit" class="icon-btn" title="Sign out" style="background:transparent;border:0;cursor:pointer;">↩</button>
+      </form>
+    @endauth
   </header>
 
   <aside class="sidebar">
