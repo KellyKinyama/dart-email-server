@@ -45,7 +45,9 @@ class RolesAndAdminSeeder extends Seeder
         $name  = env('ADMIN_NAME',     'Administrator');
         $pass  = env('ADMIN_PASSWORD', 'ChangeMe!2026');
 
-        $adminUser = User::firstOrCreate(
+        // updateOrCreate so re-running the seeder always rehashes the
+        // password to whatever ADMIN_PASSWORD currently points at.
+        $adminUser = User::updateOrCreate(
             ['email' => $email],
             ['name' => $name, 'password' => Hash::make($pass)],
         );
