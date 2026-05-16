@@ -24,6 +24,7 @@ believes you.
 | 07 | [IMAP & POP3 retrieval](07-imap-and-pop3.md) | How clients fetch messages: folders, flags, UIDs, IDLE, search. |
 | 08 | [Bounces & DSN](08-bounces-and-dsn.md) | Delivery Status Notifications: structure, status codes, return-path. |
 | 09 | [End-to-end walk-through](09-end-to-end-flow.md) | A single message followed packet-by-packet from sender to inbox. |
+| 10 | [OAuth2 provider (Laravel Passport)](10-oauth-provider.md) | How the Laravel client exposes this app as an OAuth2 authorization server so third-party apps can "Sign in with DartMail". |
 
 ## How the snippets relate to this codebase
 
