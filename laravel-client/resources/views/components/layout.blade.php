@@ -481,6 +481,11 @@
             <span class="glyph">👥</span><span>Admin · Groups</span>
           </a>
         </li>
+        <li>
+          <a href="{{ route('admin.oauth-clients') }}" class="{{ $activeNav === 'admin-oauth' ? 'active' : '' }}">
+            <span class="glyph">🔑</span><span>Admin · OAuth Clients</span>
+          </a>
+        </li>
       @endif
     </ul>
 

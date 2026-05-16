@@ -3,6 +3,7 @@
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\WebhookController;
 use App\Livewire\Admin\Groups as AdminGroups;
+use App\Livewire\Admin\OauthClients as AdminOauthClients;
 use App\Livewire\Admin\Users as AdminUsers;
 use App\Livewire\Compose\Form as ComposeForm;
 use App\Livewire\Inbox\Index as InboxIndex;
@@ -45,5 +46,6 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/users',  AdminUsers::class)->name('users');
         Route::get('/groups', AdminGroups::class)->name('groups');
+        Route::get('/oauth-clients', AdminOauthClients::class)->name('oauth-clients');
     });
 });
