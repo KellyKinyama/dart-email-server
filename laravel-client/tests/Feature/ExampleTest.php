@@ -14,6 +14,7 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        // Root route redirects to /inbox.
+        $response->assertRedirect('/inbox');
     }
 }

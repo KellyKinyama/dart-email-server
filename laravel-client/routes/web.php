@@ -10,8 +10,14 @@ Route::get('/', fn () => redirect()->route('inbox.index'));
 // IMAP-backed inbox view (live read of dart_email_server).
 Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
 Route::get('/inbox/{folder}/{uid}', [InboxController::class, 'show'])
-    ->where('folder', '[A-Za-z0-9_./-]+')
+    ->where('folder', '[A-Za-z0-9_.-]+')
+    ->where('uid', '[0-9]+')
     ->name('inbox.show');
+Route::get('/inbox/{folder}/{uid}/attachment/{index}', [InboxController::class, 'attachment'])
+    ->where('folder', '[A-Za-z0-9_.-]+')
+    ->where('uid', '[0-9]+')
+    ->where('index', '[0-9]+')
+    ->name('inbox.attachment');
 
 // Compose + send via SMTP submission.
 Route::get('/compose',  [ComposeController::class, 'create'])->name('compose.create');

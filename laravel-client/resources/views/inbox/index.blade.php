@@ -35,7 +35,12 @@
           </span>
           <span style="overflow:hidden;text-overflow:ellipsis;">{{ $who }}</span>
         </div>
-        <div class="subj">{{ $m['subject'] ?: '(no subject)' }}</div>
+        <div class="subj">
+          {{ $m['subject'] ?: '(no subject)' }}
+          @if (! empty($m['hasAttach']))
+            <span title="Has attachment" style="color:var(--text-3);margin-left:6px;">📎</span>
+          @endif
+        </div>
         <div class="date">{{ $m['date'] }}</div>
       </li>
     @empty
