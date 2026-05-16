@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\GenericOutboundMail;
+use App\Models\OutboundMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 
@@ -38,20 +39,31 @@ class ComposeController extends Controller
         $cc  = $split($data['cc']  ?? null);
         $bcc = $split($data['bcc'] ?? null);
 
-        // Persist uploads so the mailable can read them at send time.
-        $specs = [];
+        // Persist the message record. Attachments are pinned to it via
+        // spatie/laravel-medialibrary, which keeps the original filename,
+        // mime type, and disk path under our control.
+        $message = OutboundMessage::create([
+            'subject'       => $data['subject'],
+            'from_address'  => $data['from']     ?? null,
+            'from_name'     => $data['fromName'] ?? null,
+            'to_addresses'  => $to,
+            'cc_addresses'  => $cc,
+            'bcc_addresses' => $bcc,
+            'text_body'     => $data['text'] ?? null,
+            'html_body'     => $data['html'] ?? null,
+        ]);
+
         foreach ((array) $request->file('attachments', []) as $upload) {
             if (! $upload || ! $upload->isValid()) { continue; }
-            $stored = $upload->store('outbound-attachments');
-            $path   = storage_path('app/private/' . $stored);
-            if (! is_file($path)) {
-                $path = storage_path('app/' . $stored);
-            }
-            $specs[] = [
-                'path' => $path,
-                'as'   => $upload->getClientOriginalName(),
-                'mime' => $upload->getClientMimeType(),
-            ];
+            $message
+                ->addMedia($upload->getRealPath())
+                ->usingFileName($upload->hashName())
+                ->usingName($upload->getClientOriginalName())
+                ->withCustomProperties([
+                    'mime'          => $upload->getClientMimeType(),
+                    'original_name' => $upload->getClientOriginalName(),
+                ])
+                ->toMediaCollection('attachments');
         }
 
         $mailable = new GenericOutboundMail(
@@ -60,13 +72,15 @@ class ComposeController extends Controller
             htmlBody:        $data['html'] ?? null,
             fromAddress:     $data['from'] ?? null,
             fromName:        $data['fromName'] ?? null,
-            attachmentSpecs: $specs,
+            attachmentSpecs: $message->attachmentSpecs(),
         );
 
         $pending = Mail::to($to);
         if ($cc)  { $pending->cc($cc); }
         if ($bcc) { $pending->bcc($bcc); }
         $pending->send($mailable);
+
+        $message->forceFill(['sent_at' => now()])->save();
 
         return redirect()->route('compose.create')
             ->with('status', 'Message handed to dart_email_server submission port.');

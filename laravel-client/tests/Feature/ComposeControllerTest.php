@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Mail\GenericOutboundMail;
+use App\Models\OutboundMessage;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -10,10 +12,14 @@ use Tests\TestCase;
 
 class ComposeControllerTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
         Mail::fake();
+        // Spatie media-library stores by default on the `public` disk.
+        Storage::fake('public');
         Storage::fake('local');
     }
 
@@ -136,5 +142,44 @@ class ComposeControllerTest extends TestCase
                 && $env->from?->name    === 'Sender Name'
                 && $env->subject         === 'branded';
         });
+    }
+
+    public function test_outbound_message_is_persisted_with_recipients_and_sent_at(): void
+    {
+        $this->post('/compose', [
+            'to'      => 'a@example.com, b@example.com',
+            'cc'      => 'cc@example.com',
+            'bcc'     => 'bcc@example.com',
+            'subject' => 'stored',
+            'text'    => 'persist me',
+        ])->assertRedirect(route('compose.create'));
+
+        $msg = OutboundMessage::firstWhere('subject', 'stored');
+        $this->assertNotNull($msg);
+        $this->assertSame(['a@example.com', 'b@example.com'], $msg->to_addresses);
+        $this->assertSame(['cc@example.com'], $msg->cc_addresses);
+        $this->assertSame(['bcc@example.com'], $msg->bcc_addresses);
+        $this->assertNotNull($msg->sent_at, 'sent_at should be stamped after Mail::send');
+    }
+
+    public function test_uploaded_attachment_is_stored_via_media_library(): void
+    {
+        $upload = UploadedFile::fake()->create('report.pdf', 12, 'application/pdf');
+
+        $this->post('/compose', [
+            'to'          => 'rcpt@example.com',
+            'subject'     => 'with media',
+            'text'        => 'see attached',
+            'attachments' => [$upload],
+        ])->assertRedirect(route('compose.create'));
+
+        $msg = OutboundMessage::firstWhere('subject', 'with media');
+        $this->assertNotNull($msg);
+
+        $media = $msg->getMedia('attachments');
+        $this->assertCount(1, $media);
+        $this->assertSame('report.pdf',          $media->first()->name);
+        $this->assertSame('application/pdf',     $media->first()->getCustomProperty('mime'));
+        $this->assertSame('attachments',         $media->first()->collection_name);
     }
 }
