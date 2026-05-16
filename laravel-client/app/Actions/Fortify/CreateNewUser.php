@@ -34,10 +34,23 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
-        return User::create([
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
         ]);
+
+        // Best-effort role assignment. The 'user' role is provisioned by
+        // RolesAndAdminSeeder; if the seeder has never run we silently
+        // skip rather than block registration.
+        try {
+            if (\Spatie\Permission\Models\Role::where('name', 'user')->exists()) {
+                $user->assignRole('user');
+            }
+        } catch (\Throwable) {
+            // permission tables not migrated yet — ignore.
+        }
+
+        return $user;
     }
 }

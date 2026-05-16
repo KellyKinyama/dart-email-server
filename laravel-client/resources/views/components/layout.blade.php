@@ -470,6 +470,13 @@
           <span class="glyph">🔔</span><span>Webhook log</span>
         </a>
       </li>
+      @if (auth()->user()?->hasRole('admin'))
+        <li>
+          <a href="{{ route('admin.users') }}" class="{{ $activeNav === 'admin' ? 'active' : '' }}">
+            <span class="glyph">🛡️</span><span>Admin</span>
+          </a>
+        </li>
+      @endif
     </ul>
 
     @if ($sidebarError)

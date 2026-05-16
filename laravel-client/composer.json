@@ -12,6 +12,7 @@
         "laravel/tinker": "^2.10.1",
         "livewire/livewire": "^4.3",
         "spatie/laravel-medialibrary": "^11.22",
+        "spatie/laravel-permission": "^7.4",
         "webklex/laravel-imap": "^6.2"
     },
     "require-dev": {

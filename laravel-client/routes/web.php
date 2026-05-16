@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\WebhookController;
+use App\Livewire\Admin\Users as AdminUsers;
 use App\Livewire\Compose\Form as ComposeForm;
 use App\Livewire\Inbox\Index as InboxIndex;
 use App\Livewire\Inbox\Show as InboxShow;
@@ -38,4 +39,9 @@ Route::middleware(['auth'])->group(function () {
     // Browse what the webhook has stored (Livewire-backed).
     Route::get('/webhook',           WebhookIndex::class)->name('webhook.index');
     Route::get('/webhook/{message}', WebhookShow::class)->name('webhook.show');
+
+    // Admin-only area, gated by the spatie/laravel-permission 'role' middleware.
+    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/users', AdminUsers::class)->name('users');
+    });
 });
