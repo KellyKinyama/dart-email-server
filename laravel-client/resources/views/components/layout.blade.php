@@ -494,6 +494,10 @@
         IMAP unavailable: {{ \Illuminate\Support\Str::limit($sidebarError, 80) }}
       </div>
     @endif
+
+    @auth
+      <livewire:push.toggle />
+    @endauth
   </aside>
 
   <main class="main">
@@ -514,5 +518,6 @@
   </main>
 </div>
 @livewireScripts
+<script src="{{ asset('js/push.js') }}" defer></script>
 </body>
 </html>

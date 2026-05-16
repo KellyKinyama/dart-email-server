@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\IncomingMessage;
+use App\Models\User;
+use App\Notifications\NewMailNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * Thin controller for the inbound webhook ingest endpoint.
@@ -38,7 +41,7 @@ class WebhookController extends Controller
 
         $auth = $data['auth'] ?? [];
 
-        IncomingMessage::create([
+        $message = IncomingMessage::create([
             'message_id'    => $data['messageId'] ?? null,
             'envelope_from' => $data['envelopeFrom'] ?? null,
             'envelope_to'   => $data['envelopeTo'] ?? [],
@@ -54,6 +57,23 @@ class WebhookController extends Controller
             'size'          => $data['size'] ?? 0,
             'received_at'   => now(),
         ]);
+
+        // Fan-out Web Push notifications to any local user whose email
+        // matches one of the envelope-to recipients and who has registered
+        // at least one push subscription.
+        $recipients = array_filter(array_map(
+            fn ($e) => is_string($e) ? strtolower(trim($e)) : null,
+            $data['envelopeTo'] ?? []
+        ));
+        if ($recipients) {
+            $users = User::query()
+                ->whereIn('email', $recipients)
+                ->whereHas('pushSubscriptions')
+                ->get();
+            if ($users->isNotEmpty()) {
+                Notification::send($users, new NewMailNotification($message));
+            }
+        }
 
         return response()->json(['accepted' => true]);
     }

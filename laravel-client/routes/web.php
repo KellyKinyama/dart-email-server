@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\InboxController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\WebhookController;
 use App\Livewire\Admin\Groups as AdminGroups;
 use App\Livewire\Admin\OauthClients as AdminOauthClients;
@@ -41,6 +42,10 @@ Route::middleware(['auth'])->group(function () {
     // Browse what the webhook has stored (Livewire-backed).
     Route::get('/webhook',           WebhookIndex::class)->name('webhook.index');
     Route::get('/webhook/{message}', WebhookShow::class)->name('webhook.show');
+
+    // Web Push subscription endpoints (called from /js/push.js).
+    Route::post('/push/subscribe',   [PushSubscriptionController::class, 'store'])->name('push.subscribe');
+    Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
 
     // Admin-only area, gated by the spatie/laravel-permission 'role' middleware.
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {

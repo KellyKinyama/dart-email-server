@@ -25,6 +25,7 @@ believes you.
 | 08 | [Bounces & DSN](08-bounces-and-dsn.md) | Delivery Status Notifications: structure, status codes, return-path. |
 | 09 | [End-to-end walk-through](09-end-to-end-flow.md) | A single message followed packet-by-packet from sender to inbox. |
 | 10 | [OAuth2 provider (Laravel Passport)](10-oauth-provider.md) | How the Laravel client exposes this app as an OAuth2 authorization server so third-party apps can "Sign in with DartMail". |
+| 11 | [Push notifications (Web Push / VAPID)](11-push-notifications.md) | Browser/OS-level push notifications fired when new mail arrives at the webhook. |
 
 ## How the snippets relate to this codebase
 
