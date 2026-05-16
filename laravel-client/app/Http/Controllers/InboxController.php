@@ -3,35 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Services\ImapMailboxService;
-use Illuminate\Http\Request;
 
+/**
+ * Thin controller for the IMAP attachment download endpoint.
+ *
+ * The interactive inbox UI lives in App\Livewire\Inbox\{Index,Show}.
+ * Binary file download isn't a Livewire concern (it returns raw bytes,
+ * not HTML), so it stays as a stateless controller action.
+ */
 class InboxController extends Controller
 {
     public function __construct(protected ImapMailboxService $imap) {}
-
-    public function index(Request $request)
-    {
-        $folder = $request->query('folder', 'INBOX');
-        try {
-            $folders  = $this->imap->folders();
-            $messages = $this->imap->listMessages($folder, 100);
-            $error    = null;
-        } catch (\Throwable $e) {
-            $folders  = [];
-            $messages = [];
-            $error    = $e->getMessage();
-        }
-
-        return view('inbox.index', compact('folders', 'messages', 'folder', 'error'));
-    }
-
-    public function show(string $folder, int $uid)
-    {
-        $message = $this->imap->getMessage($folder, $uid);
-        abort_if(! $message, 404);
-
-        return view('inbox.show', compact('message', 'folder'));
-    }
 
     public function attachment(string $folder, int $uid, int $index)
     {

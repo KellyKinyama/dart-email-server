@@ -406,6 +406,7 @@
       .topbar .meta { display: none; }
     }
   </style>
+  @livewireStyles
 </head>
 <body>
 <div class="app">
@@ -489,5 +490,6 @@
     </div>
   </main>
 </div>
+@livewireScripts
 </body>
 </html>

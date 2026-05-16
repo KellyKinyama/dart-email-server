@@ -6,22 +6,12 @@ use App\Models\IncomingMessage;
 use Illuminate\Http\Request;
 
 /**
- * Webhook hit by dart_email_server when an inbound (port 25) message
- * passes its 'mail' event. Authenticate via shared bearer secret.
+ * Thin controller for the inbound webhook ingest endpoint.
  *
- * Expected JSON shape:
- *   {
- *     "messageId":   "<...>",
- *     "envelopeFrom":"alice@example.com",
- *     "envelopeTo":  ["bob@example.com"],
- *     "headerFrom":  "Alice <alice@example.com>",
- *     "subject":     "...",
- *     "text":        "...",
- *     "html":        "...",
- *     "raw":         "<base64 bytes>",
- *     "size":        2345,
- *     "auth":        {"spf":"pass","dkim":"pass","dmarc":"pass","rdns":"pass"}
- *   }
+ * The browse/show UI lives in App\Livewire\Webhook\{Index,Show}.
+ * The ingest endpoint stays as a stateless controller because it is a
+ * server-to-server JSON API hit by dart_email_server, not a Livewire
+ * component.
  */
 class WebhookController extends Controller
 {
@@ -66,16 +56,5 @@ class WebhookController extends Controller
         ]);
 
         return response()->json(['accepted' => true]);
-    }
-
-    public function index()
-    {
-        $messages = IncomingMessage::orderByDesc('received_at')->limit(100)->get();
-        return view('webhook.index', compact('messages'));
-    }
-
-    public function show(IncomingMessage $message)
-    {
-        return view('webhook.show', compact('message'));
     }
 }

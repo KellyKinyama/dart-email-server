@@ -2,14 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Compose\Form;
 use App\Mail\GenericOutboundMail;
 use App\Models\OutboundMessage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use Tests\TestCase;
 
+/**
+ * Exercises App\Livewire\Compose\Form (the former ComposeController).
+ */
 class ComposeControllerTest extends TestCase
 {
     use RefreshDatabase;
@@ -18,35 +23,37 @@ class ComposeControllerTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
-        // Spatie media-library stores by default on the `public` disk.
         Storage::fake('public');
         Storage::fake('local');
     }
 
     public function test_get_compose_shows_form(): void
     {
-        $response = $this->get('/compose');
-        $response->assertStatus(200);
-        $response->assertSee('compose', false);
+        $this->get('/compose')
+            ->assertStatus(200)
+            ->assertSee('New message');
     }
 
     public function test_to_subject_required(): void
     {
-        $this->from('/compose')
-            ->post('/compose', [])
-            ->assertStatus(302)
-            ->assertSessionHasErrors(['to', 'subject']);
+        Livewire::test(Form::class)
+            ->set('to', '')
+            ->set('subject', '')
+            ->call('send')
+            ->assertHasErrors(['to' => 'required', 'subject' => 'required']);
+
         Mail::assertNothingOutgoing();
     }
 
     public function test_minimal_send_works(): void
     {
-        $this->post('/compose', [
-            'to'      => 'rcpt@example.com',
-            'subject' => 'hi',
-            'text'    => 'body',
-        ])->assertRedirect(route('compose.create'))
-          ->assertSessionHas('status');
+        Livewire::test(Form::class)
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'hi')
+            ->set('text', 'body')
+            ->call('send')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('compose.create'));
 
         Mail::assertSent(GenericOutboundMail::class, function ($mail) {
             return $mail->hasTo('rcpt@example.com')
@@ -57,13 +64,14 @@ class ComposeControllerTest extends TestCase
 
     public function test_cc_and_bcc_get_split_and_attached(): void
     {
-        $this->post('/compose', [
-            'to'      => 'a@example.com, b@example.com',
-            'cc'      => 'cc1@example.com; cc2@example.com',
-            'bcc'     => 'bcc@example.com',
-            'subject' => 'multi-recipient',
-            'text'    => 'hello',
-        ])->assertRedirect(route('compose.create'));
+        Livewire::test(Form::class)
+            ->set('to',  'a@example.com, b@example.com')
+            ->set('cc',  'cc1@example.com; cc2@example.com')
+            ->set('bcc', 'bcc@example.com')
+            ->set('subject', 'multi-recipient')
+            ->set('text', 'hello')
+            ->call('send')
+            ->assertHasNoErrors();
 
         Mail::assertSent(GenericOutboundMail::class, function ($mail) {
             return $mail->hasTo('a@example.com')
@@ -78,12 +86,13 @@ class ComposeControllerTest extends TestCase
     {
         $upload = UploadedFile::fake()->create('report.pdf', 12, 'application/pdf');
 
-        $this->post('/compose', [
-            'to'             => 'rcpt@example.com',
-            'subject'        => 'with attachment',
-            'text'           => 'see attached',
-            'attachments'    => [$upload],
-        ])->assertRedirect(route('compose.create'));
+        Livewire::test(Form::class)
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'with attachment')
+            ->set('text', 'see attached')
+            ->set('attachments', [$upload])
+            ->call('send')
+            ->assertHasNoErrors();
 
         Mail::assertSent(GenericOutboundMail::class, function ($mail) {
             $specs = $mail->attachmentSpecs;
@@ -97,44 +106,52 @@ class ComposeControllerTest extends TestCase
 
     public function test_attachment_too_large_is_rejected(): void
     {
-        // 30 MB > 25 MB cap.
-        $upload = UploadedFile::fake()->create('big.bin', 30 * 1024);
+        $upload = UploadedFile::fake()->create('big.bin', 30 * 1024); // 30 MB
 
-        $this->from('/compose')
-            ->post('/compose', [
-                'to'          => 'rcpt@example.com',
-                'subject'     => 'oversize',
-                'text'        => 'nope',
-                'attachments' => [$upload],
-            ])
-            ->assertStatus(302)
-            ->assertSessionHasErrors('attachments.0');
+        // Livewire's WithFileUploads runs its own size validation when the
+        // file is staged via set(). Either the upload itself errors or the
+        // explicit validate() in send() rejects the attachments.* rule.
+        $component = Livewire::test(Form::class)
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'oversize')
+            ->set('text', 'nope')
+            ->set('attachments', [$upload]);
+
+        $errors = $component->errors();
+        if ($errors->isEmpty()) {
+            $component->call('send');
+            $errors = $component->errors();
+        }
+
+        $this->assertTrue(
+            $errors->has('attachments') || $errors->has('attachments.0'),
+            'Expected an error on attachments or attachments.0; got: ' . $errors->toJson()
+        );
 
         Mail::assertNothingOutgoing();
     }
 
     public function test_invalid_email_in_from_field_rejected(): void
     {
-        $this->from('/compose')
-            ->post('/compose', [
-                'to'      => 'rcpt@example.com',
-                'subject' => 'bad from',
-                'text'    => 'x',
-                'from'    => 'not-an-email',
-            ])
-            ->assertStatus(302)
-            ->assertSessionHasErrors('from');
+        Livewire::test(Form::class)
+            ->set('from', 'not-an-email')
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'bad from')
+            ->set('text', 'x')
+            ->call('send')
+            ->assertHasErrors(['from' => 'email']);
     }
 
     public function test_explicit_from_address_propagates_to_envelope(): void
     {
-        $this->post('/compose', [
-            'to'       => 'rcpt@example.com',
-            'subject'  => 'branded',
-            'text'     => 'hi',
-            'from'     => 'sender@example.com',
-            'fromName' => 'Sender Name',
-        ])->assertRedirect(route('compose.create'));
+        Livewire::test(Form::class)
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'branded')
+            ->set('text', 'hi')
+            ->set('from', 'sender@example.com')
+            ->set('fromName', 'Sender Name')
+            ->call('send')
+            ->assertHasNoErrors();
 
         Mail::assertSent(GenericOutboundMail::class, function ($mail) {
             $env = $mail->envelope();
@@ -146,13 +163,14 @@ class ComposeControllerTest extends TestCase
 
     public function test_outbound_message_is_persisted_with_recipients_and_sent_at(): void
     {
-        $this->post('/compose', [
-            'to'      => 'a@example.com, b@example.com',
-            'cc'      => 'cc@example.com',
-            'bcc'     => 'bcc@example.com',
-            'subject' => 'stored',
-            'text'    => 'persist me',
-        ])->assertRedirect(route('compose.create'));
+        Livewire::test(Form::class)
+            ->set('to', 'a@example.com, b@example.com')
+            ->set('cc', 'cc@example.com')
+            ->set('bcc', 'bcc@example.com')
+            ->set('subject', 'stored')
+            ->set('text', 'persist me')
+            ->call('send')
+            ->assertHasNoErrors();
 
         $msg = OutboundMessage::firstWhere('subject', 'stored');
         $this->assertNotNull($msg);
@@ -166,20 +184,21 @@ class ComposeControllerTest extends TestCase
     {
         $upload = UploadedFile::fake()->create('report.pdf', 12, 'application/pdf');
 
-        $this->post('/compose', [
-            'to'          => 'rcpt@example.com',
-            'subject'     => 'with media',
-            'text'        => 'see attached',
-            'attachments' => [$upload],
-        ])->assertRedirect(route('compose.create'));
+        Livewire::test(Form::class)
+            ->set('to', 'rcpt@example.com')
+            ->set('subject', 'with media')
+            ->set('text', 'see attached')
+            ->set('attachments', [$upload])
+            ->call('send')
+            ->assertHasNoErrors();
 
         $msg = OutboundMessage::firstWhere('subject', 'with media');
         $this->assertNotNull($msg);
 
         $media = $msg->getMedia('attachments');
         $this->assertCount(1, $media);
-        $this->assertSame('report.pdf',          $media->first()->name);
-        $this->assertSame('application/pdf',     $media->first()->getCustomProperty('mime'));
-        $this->assertSame('attachments',         $media->first()->collection_name);
+        $this->assertSame('report.pdf',      $media->first()->name);
+        $this->assertSame('application/pdf', $media->first()->getCustomProperty('mime'));
+        $this->assertSame('attachments',     $media->first()->collection_name);
     }
 }
